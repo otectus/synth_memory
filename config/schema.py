@@ -36,27 +36,23 @@ class PerformanceConfig(BaseModel):
     graph_buffer_pool_gb: int = Field(default=4, ge=1, alias='buffer_pool_gb')
     cpu_executor_workers: int = Field(default=4, ge=1, le=32)
     embedding_batch_size: int = Field(default=64, ge=1)
+    ner_extraction_timeout_ms: int = Field(default=2000, ge=100, alias='ner_timeout_ms')
 
 class LifecycleConfig(BaseModel):
     retention_policy: str = "Forever"
     compression_policy: Literal["Summarize", "Archive", "Delete"] = "Summarize"
     reinforcement_threshold: int = Field(default=3, ge=1)
-    protected_tags: List[str] = ["identity", "core_project", "critical"]
-    auto_tag_entities: bool = True
 
 class SecurityConfig(BaseModel):
     pii_redaction_mode: PIIRedactionMode = PIIRedactionMode.STRICT
     cross_mode_inference: bool = False
     forget_policy: Literal["HardDelete", "SoftDelete", "CryptoShred"] = "CryptoShred"
-    namespace_lock: bool = True
     audit_log_enabled: bool = True
 
 class RetrievalConfig(BaseModel):
     vector_k: int = Field(default=5, ge=1)
     vector_k_per_mode: Dict[str, int] = {}
     graph_depth_traversal: int = Field(default=2, ge=1, le=5)
-    temporal_preference: str = "Balanced"
-    community_prefiltering: bool = True
     context_window_injection_ratio: float = Field(default=20.0, ge=0.0, le=50.0)
     rrf_k_parameter: int = Field(default=60, ge=20)
 

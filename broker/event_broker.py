@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 import numpy as np
+import logging
 from datetime import datetime
 from typing import List, Dict, Any
 from ..utils.cpu_executor import CPUExecutor
@@ -11,13 +12,13 @@ try:
 except ImportError:
     GLiNER = None
 
-class MemoryEventBroker:
+class MemoryIndexer:
     """
     Async Event Broker that solves Friction Point #1: Latency Trap.
     Uses GLiNER (small-v2.1) for zero-shot entity extraction in <50ms.
     """
-    def __init__(self, plugin, vs, gs, cfg):
-        self.plugin = plugin
+    def __init__(self, embed_fn, vs, gs, cfg):
+        self.embed_fn = embed_fn
         self.vs = vs
         self.gs = gs
         self.cfg = cfg
@@ -25,6 +26,9 @@ class MemoryEventBroker:
         self.redactor = PIIRedactor(mode=cfg.security.pii_redaction_mode)
         self.gliner_model = None
         self.labels = ["PROJECT", "PERSON", "CONCEPT", "API", "CODE_ENTITY", "ALGORITHM", "PARAMETER"]
+        
+        # Set up logging
+        self.log = logging.getLogger("SynthMemory")
 
     def _lazy_load_gliner(self):
         if GLiNER and not self.gliner_model:
@@ -41,7 +45,7 @@ class MemoryEventBroker:
             
             # 2. Parallel AI Ops (Extraction & Embedding)
             entities = await self.executor.run(self._extract_sync, clean_text)
-            embedding = await self.plugin.get_embeddings(clean_text)
+            embedding = await self.embed_fn(clean_text)
             
             # 3. Storage persistence
             doc_id = str(uuid.uuid4())
@@ -54,10 +58,11 @@ class MemoryEventBroker:
                 self.gs.upsert_entity(ename, ent['text'], ent['label'])
                 self.gs.add_relation(doc_id, ename, "MENTIONS", conf=ent.get('score', 1.0))
         except Exception as e:
-            print(f"[SynthMemory Broker Error]: {e}")
+            self.log.error(f"[SynthMemory: Broker] {e}")
 
     def _extract_sync(self, text: str) -> List[Dict]:
         self._lazy_load_gliner()
         if self.gliner_model:
-            return self.gliner_model.predict_entities(text, self.labels, threshold=0.3)
+            result = self.gliner_model.predict_entities(text, self.labels, threshold=0.3)
+            return result or []
         return []
